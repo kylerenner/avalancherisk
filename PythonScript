@@ -1,0 +1,48 @@
+import arcpy
+from arcpy.sa import *
+
+arcpy.env.overwriteOutput = True
+
+arcpy.CheckOutExtension('Spatial')
+
+#inputs
+in_dem = arcpy.GetParameterAsText(0)
+in_landcover = arcpy.GetParameterAsText(1)
+
+aoi = arcpy.GetParameterAsText(2)
+
+output_filepath = arcpy.GetParameterAsText(3)
+
+
+#Clip to area of interest
+in_dem_clip = ExtractByMask(in_dem, aoi)
+in_landcover_clip = ExtractByMask(in_landcover, aoi)
+
+#Run Slope tool
+outSlope = Slope(in_dem_clip, 'DEGREE')
+
+#Run Aspect tool
+outAspect = Aspect(in_dem_clip)
+
+#Run Curvature tool
+outCurvature = Curvature(in_dem_clip, out_profile_curve_raster = 'profile')
+
+#Reclassifications
+
+slp = Reclassify(outSlope, 'Value', RemapRange([[0,25,1],[25,30,2],[30,45,3],[45,55,2],[55,180,1]]), 'NODATA')
+
+aspt = Reclassify(outAspect, 'Value', RemapRange([[0,45,3],[45,225,2],[225,315,1],[315,360,3]]))
+
+curv = Reclassify('profile', 'Value', RemapRange([[-100000000000000000000000,0,3],[0,100000000000000000000000,0]]))
+
+lc = Reclassify(in_landcover_clip, 'Value', RemapValue([[11,0],[12,3],[21,0],[22,0],[23,0],[24,0],[31,3],[41,1],[42,1],[43,1],[51,2],[52,2],[71,3],[72,3],[73,3],[74,3],[81,2],[82,2],[90,1],[95,1]]))
+
+#Equation
+
+risk = (0.4 * slp) + (0.15 * aspt) + (0.2 * curv) + (0.25 * lc)
+
+#Output
+
+risk.save(output_filepath)
+
+arcpy.AddMessage('Complete!')
